@@ -7,6 +7,13 @@
 namespace Settings
 {
 	using namespace DKUtil::Alias;
+#if !defined(_WIN32)
+	// SimpleIni's ConvertUTF.h (pulled in by DKUtil's INI parser on Linux) defines
+	// a global `typedef unsigned char Boolean`, which is ambiguous with
+	// DKUtil::Alias::Boolean under the using-directive above. This using-declaration
+	// names DKUtil's Boolean explicitly in this scope, hiding the global one.
+	using DKUtil::Alias::Boolean;
+#endif
 
 	class Main : public DKUtil::model::Singleton<Main>
 	{

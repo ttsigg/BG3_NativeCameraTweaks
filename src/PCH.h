@@ -97,22 +97,32 @@
 #include <vector>
 #include <version>
 
+#if defined(_WIN32)
 // winnt
 #include <ShlObj_core.h>
 
 #undef min
 #undef max
+#endif
 
 using namespace std::literals;
 
+#if defined(_WIN32)
 #define DLLEXPORT extern "C" [[maybe_unused]] __declspec(dllexport)
+#else
+#define DLLEXPORT extern "C" [[maybe_unused]] __attribute__((visibility("default")))
+#endif
 
 // Plugin
 #include "Plugin.h"
 
 // DKUtil
 #define PLUGIN_MODE
+#if defined(_WIN32)
 #define LOG_PATH "NativeMods\\"
+#else
+#define LOG_PATH "NativeMods/"
+#endif
 #include "DKUtil/Hook.hpp"
 #include "DKUtil/Logger.hpp"
 

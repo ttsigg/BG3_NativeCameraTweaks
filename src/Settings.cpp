@@ -1,5 +1,11 @@
 #include "Settings.h"
 
+#if !defined(_WIN32)
+#	include <cerrno>
+#	include <sys/inotify.h>
+#	include <unistd.h>
+#endif
+
 namespace Settings
 {
 	void Main::Load() noexcept
@@ -19,15 +25,15 @@ namespace Settings
 
 			config.Bind(ExplorationUnlockPitch, true);
 			config.Bind(ExplorationKeepTacticalPitchLocked, false);
-			config.Bind<-89, 89>(ExplorationUnlockedPitchMin, -85.f);
-			config.Bind<-89, 89>(ExplorationUnlockedPitchMax, 85.f);
+			config.Bind<-89.0, 89.0>(ExplorationUnlockedPitchMin, -85.f);
+			config.Bind<-89.0, 89.0>(ExplorationUnlockedPitchMax, 85.f);
 			config.Bind(ExplorationOverrideLockedPitch, false);
-			config.Bind<-89, 89>(ExplorationLockedPitchClose, 19.05f);          // 19.05
-			config.Bind<-89, 89>(ExplorationLockedPitchFar, 40.71f);            // 40.71
-			config.Bind<-89, 89>(ExplorationLockedTacticalPitchClose, 85.55f);  // 85.55
-			config.Bind<-89, 89>(ExplorationLockedTacticalPitchFar, 85.55f);    // 85.55
-			config.Bind<-89, 89>(ExplorationLockedAltPitchClose, 32.69f);       // 32.69
-			config.Bind<-89, 89>(ExplorationLockedAltPitchFar, 39.7f);          // 39.7
+			config.Bind<-89.0, 89.0>(ExplorationLockedPitchClose, 19.05f);          // 19.05
+			config.Bind<-89.0, 89.0>(ExplorationLockedPitchFar, 40.71f);            // 40.71
+			config.Bind<-89.0, 89.0>(ExplorationLockedTacticalPitchClose, 85.55f);  // 85.55
+			config.Bind<-89.0, 89.0>(ExplorationLockedTacticalPitchFar, 85.55f);    // 85.55
+			config.Bind<-89.0, 89.0>(ExplorationLockedAltPitchClose, 32.69f);       // 32.69
+			config.Bind<-89.0, 89.0>(ExplorationLockedAltPitchFar, 39.7f);          // 39.7
 
 			config.Bind(ExplorationOverrideZoom, true);
 			config.Bind(ExplorationZoomMin, 0.5f);          // 3.5
@@ -51,15 +57,15 @@ namespace Settings
 
 			config.Bind(CombatUnlockPitch, true);
 			config.Bind(CombatKeepTacticalPitchLocked, false);
-			config.Bind<-89, 89>(CombatUnlockedPitchMin, -85.f);
-			config.Bind<-89, 89>(CombatUnlockedPitchMax, 85.f);
+			config.Bind<-89.0, 89.0>(CombatUnlockedPitchMin, -85.f);
+			config.Bind<-89.0, 89.0>(CombatUnlockedPitchMax, 85.f);
 			config.Bind(CombatOverrideLockedPitch, false);
-			config.Bind<-89, 89>(CombatLockedPitchClose, 32.73f);          // 32.73
-			config.Bind<-89, 89>(CombatLockedPitchFar, 52.42f);            // 52.42
-			config.Bind<-89, 89>(CombatLockedTacticalPitchClose, 85.55f);  // 85.55
-			config.Bind<-89, 89>(CombatLockedTacticalPitchFar, 85.55f);    // 85.55
-			config.Bind<-89, 89>(CombatLockedAltPitchClose, 32.69f);       // 32.69
-			config.Bind<-89, 89>(CombatLockedAltPitchFar, 39.7f);          // 39.7
+			config.Bind<-89.0, 89.0>(CombatLockedPitchClose, 32.73f);          // 32.73
+			config.Bind<-89.0, 89.0>(CombatLockedPitchFar, 52.42f);            // 52.42
+			config.Bind<-89.0, 89.0>(CombatLockedTacticalPitchClose, 85.55f);  // 85.55
+			config.Bind<-89.0, 89.0>(CombatLockedTacticalPitchFar, 85.55f);    // 85.55
+			config.Bind<-89.0, 89.0>(CombatLockedAltPitchClose, 32.69f);       // 32.69
+			config.Bind<-89.0, 89.0>(CombatLockedAltPitchFar, 39.7f);          // 39.7
 
 			config.Bind(CombatOverrideZoom, true);
 			config.Bind(CombatZoomMin, 0.5f);          // 4
@@ -109,6 +115,47 @@ namespace Settings
 	// from https://github.com/emoose/DLSSTweaks
     void Main::WatchForChanges()
 	{
+#if !defined(_WIN32)
+		// inotify port of the Windows ReadDirectoryChangesW watcher.
+		const auto path = std::filesystem::current_path() / CONFIG_PATH;
+		const auto cfgFilename = path.filename().string();
+		const auto cfgFolder = path.parent_path().string();
+
+		int fd = ::inotify_init1(IN_CLOEXEC);
+		if (fd < 0) {
+			WARN("Config monitoring: inotify_init1 failed (errno {})", errno);
+			return;
+		}
+		int wd = ::inotify_add_watch(fd, cfgFolder.c_str(),
+			IN_CLOSE_WRITE | IN_MOVED_TO | IN_CREATE);
+		if (wd < 0) {
+			WARN("Config monitoring: inotify_add_watch \"{}\" failed (errno {})", cfgFolder, errno);
+			::close(fd);
+			return;
+		}
+
+		INFO("Config monitoring: watching for config updates...");
+
+		alignas(inotify_event) char buf[4096];
+		for (;;) {
+			ssize_t len = ::read(fd, buf, sizeof(buf));
+			if (len <= 0) {
+				if (errno == EINTR) continue;
+				break;
+			}
+			for (char* p = buf; p < buf + len;) {
+				auto* evt = reinterpret_cast<inotify_event*>(p);
+				if (evt->len > 0 && cfgFilename == evt->name) {
+					INFO("Config monitoring: Change detected! Updating config...")
+					Load();
+				}
+				p += sizeof(inotify_event) + evt->len;
+			}
+		}
+
+		::inotify_rm_watch(fd, wd);
+		::close(fd);
+#else
 		const auto path = std::filesystem::current_path() / CONFIG_PATH;
 
 		const auto cfgFilename = path.filename().wstring();
@@ -196,5 +243,6 @@ namespace Settings
 		}
 
 		CloseHandle(file);
+#endif
 	}
 }
