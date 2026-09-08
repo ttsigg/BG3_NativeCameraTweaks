@@ -35,14 +35,9 @@ namespace NCT::Linux
 	// / SDL_PushEvent; the shipped game may pump on a dedicated input
 	// thread), carrying that event's `yrel`.
 	//
-	// main.cpp's Linux constructor path binds this to an atomic accumulate
-	// into CameraTweaks::GetSingleton()->delta_y — an ordinary `int`, not
-	// std::atomic (CameraTweaksManager.h is outside this package's
-	// ownership). The consumer (CameraTweaks::CalculateCameraPitch) reads
-	// and zeroes delta_y once per frame on the game's own thread, so
-	// whatever this callback does MUST be a genuine atomic read-modify-write
-	// against that same `int` (e.g. __atomic_fetch_add(&delta_y, a_yrel,
-	// __ATOMIC_RELAXED)), not a plain `+=`.
+	// main.cpp binds this to CameraTweaks::delta_y.fetch_add(). The camera
+	// hook consumes and clears that atomic with exchange(), so no motion is
+	// lost between a separate SDL input thread and the game thread.
 	using DeltaYSink = void (*)(int a_yrel);
 
 	// Binds (or rebinds) the sink invoked by the mouse-Y watch. Must be

@@ -53,7 +53,10 @@ public:
 	
 	float AdjustInputValueForDeadzone(float a_inputValue, bool a_bApplyMult = true);
 
-	int delta_y;
+	// SDL event watches may run on a different thread from the camera hook.
+	// Exchange once per frame so accumulation and clearing are one atomic
+	// operation rather than a data race between a callback and the game thread.
+	std::atomic<int> delta_y{ 0 };
 
 	RE::Player* GetCurrentPlayer() { return _currentPlayer; }
 	void SetCurrentPlayer(RE::Player* a_player) { _currentPlayer = a_player; }

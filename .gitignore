@@ -1,5 +1,4 @@
 Build/
 .vs/
 *.zip
-build-linux*/
-build-sniper*/
+build-*/

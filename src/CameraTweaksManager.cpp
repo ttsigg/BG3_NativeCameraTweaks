@@ -256,10 +256,9 @@ bool CameraTweaks::CalculateCameraPitch(int16_t a_playerId, RE::CameraObject* a_
 		int32_t deltaY = 0;
 		if (a_cameraObject->cameraModeFlags & RE::CameraModeFlags::kMouseRotation) {  // mouse rotation mode
 			const float sign = *settings->InvertMousePitch ? -1.f : 1.f;
-			deltaY = delta_y * sign;
-			delta_y = 0;
+			deltaY = delta_y.exchange(0, std::memory_order_relaxed) * sign;
 		} else {
-		    delta_y = 0;
+		    delta_y.store(0, std::memory_order_relaxed);
 		}
 
 		float pitchDelta = 0.f;

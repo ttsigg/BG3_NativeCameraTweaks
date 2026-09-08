@@ -1600,7 +1600,7 @@ namespace Hooks
 	{
 		// Windows only — on Linux src/Linux/SdlInput.cpp writes delta_y directly and
 		// this hook is never installed (see HookLinux()).
-		CameraTweaks::GetSingleton()->delta_y = a_deltaY;
+		CameraTweaks::GetSingleton()->delta_y.store(a_deltaY, std::memory_order_relaxed);
 
 		return _SDLMouseYHook(a1, a2, a3, a_deltaY);
 	}

@@ -83,13 +83,9 @@ __attribute__((constructor)) static void BG3NCT_Init()
 	// is bound would just WARN-once and drop input. Must run after
 	// Hooks::Install() (above) per SdlInput.h's contract.
 	NCT::Linux::SetDeltaYSink([](int a_yrel) {
-		// CameraTweaksManager.h's `delta_y` is a plain int, not
-		// std::atomic (that header is outside this package's ownership),
-		// and CalculateCameraPitch reads-and-zeroes it once per frame on
-		// the game's own thread. This callback runs on whichever thread
-		// SDL invokes event watches on, so it needs a real atomic
-		// read-modify-write here rather than a plain `+=`.
-		__atomic_fetch_add(&CameraTweaks::GetSingleton()->delta_y, a_yrel, __ATOMIC_RELAXED);
+		// SDL may invoke event watches on an input thread. CalculateCameraPitch
+		// consumes the accumulated value with one atomic exchange per frame.
+		CameraTweaks::GetSingleton()->delta_y.fetch_add(a_yrel, std::memory_order_relaxed);
 	});
 
 	if (!NCT::Linux::InstallMouseYWatch()) {
