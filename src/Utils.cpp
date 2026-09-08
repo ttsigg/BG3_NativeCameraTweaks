@@ -4,6 +4,8 @@
 
 #if defined(_WIN32)
 #pragma comment(lib, "version")
+#else
+#	include "Linux/LinuxLayout.h"
 #endif
 
 namespace Utils
@@ -31,11 +33,20 @@ namespace Utils
 
 		return false;
 #else
-		// ELF has no VERSIONINFO resource; the game build identity is the site
-		// catalog's build_id. Report it as unavailable here (log-only).
+		// ELF has no VERSIONINFO resource, but it does carry an identity: the
+		// NT_GNU_BUILD_ID note, which changes on every relink and is therefore a
+		// sharper build fingerprint than a product-version string. DKUtil reads it
+		// out of the running program's PT_NOTE for the site catalog's build gate
+		// (SiteCatalog.hpp); report the same value here so the mod's own log
+		// records which build it attached to — without it a stale-catalog report
+		// has nothing to compare against.
 		(void)a_processPath;
-		(void)a_outProductVersion;
-		return false;
+		const auto& buildId = dku::Hook::SiteCatalog::running_build_id();
+		if (buildId.empty()) {
+			return false;
+		}
+		a_outProductVersion = "GNU build-id " + buildId;
+		return true;
 #endif
     }
 
@@ -51,11 +62,33 @@ namespace Utils
 
 	RE::Player* GetCurrentPlayer(RE::UnkObject* a1)
 	{
+#if defined(_WIN32)
 		return a1->currentPlayer;
+#else
+		// RE::UnkObject is member-reordered on Linux (tracker 0x141e0f120 §3.2):
+		// currentPlayer is Win +0x10 -> Lin +0x20, dual-confirmed. Reading the
+		// C++ struct field here would read Linux +0x10, a different pool slot.
+		if (!a1 || !NCT::LinuxLayout::Known(NCT::LinuxLayout::kUnkObject_currentPlayer)) {
+			return nullptr;
+		}
+		return *reinterpret_cast<RE::Player**>(
+			reinterpret_cast<uintptr_t>(a1) + NCT::LinuxLayout::kUnkObject_currentPlayer);
+#endif
 	}
 
 	RE::CameraDefinition* GetCurrentCameraDefinition(RE::CameraModeFlags a_cameraModeFlags)
 	{
+#if !defined(_WIN32)
+		// On Linux this is not a fallback: the game function is inlined at every
+		// call site (tracker 0x141c714e0-get-current-camera-definition, review
+		// 2026-09-01 CONFIRMED — 19 hosts, no standalone counterpart exists), so
+		// Hooks::Offsets::GetCurrentCameraDefinition is permanently null and this
+		// reimplementation is the ONLY path. The four offsets it uses come from
+		// LinuxLayout.h (0x1362 / 0xC80 / 0x7C4 / 0x958).
+		if (!Hooks::Offsets::UnkCameraSingletonPtr || !*Hooks::Offsets::UnkCameraSingletonPtr) {
+			return nullptr;
+		}
+#endif
 		// replicated inlined game function.
 		// NOTE: the original read `reinterpret_cast<bool>(ptr) + offset`, which casts
 		// the singleton POINTER to bool (always true when non-null) rather than

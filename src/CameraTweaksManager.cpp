@@ -4,9 +4,36 @@
 #include "Settings.h"
 #include "Utils.h"
 
+#if !defined(_WIN32)
+#	include "Linux/LinuxLayout.h"
+#endif
+
 void CameraTweaks::SetCameraSettings()
 {
 	const auto settings = Settings::Main::GetSingleton();
+
+#if !defined(_WIN32)
+	// The two camera definitions below are computed as
+	// *UnkCameraSingletonPtr + {explorationCameraOffset, combatCameraOffset}, i.e.
+	// interior pointers into ls::GlobalSwitches. If the catalog did not resolve the
+	// singleton, those would be small absolute addresses and the writes would land
+	// on whatever is mapped there.
+	//
+	// The RE::CameraDefinition FIELD offsets used below (pitch 0x160..0x17C, zoom
+	// 0x28/0x2C/0x30/0x34/0xC8/0xCC, FOV 0x84/0x88/0x8C/0x90/0xD0, offset
+	// multipliers 0x64/0x68) are NOT Linux-only numbers and deliberately have no
+	// kCameraDefinition_* entry: they are compile-time-asserted by
+	// RE/Generated/LayoutManifest.inl and corroborated on Linux by 27 same-offset
+	// disassembly witnesses plus an identical 0x194 definition stride. See the
+	// "RE::CameraDefinition" block in Linux/LinuxLayout.h for the full evidence.
+	if (!Hooks::Offsets::UnkCameraSingletonPtr || !*Hooks::Offsets::UnkCameraSingletonPtr) {
+		static std::once_flag warned;
+		std::call_once(warned, [] {
+			WARN("SetCameraSettings: ls::GlobalSwitches unresolved — camera settings not applied")
+		});
+		return;
+	}
+#endif
 
 	{
 		ReadLocker locker(settings->Lock);
@@ -280,6 +307,34 @@ void CameraTweaks::AdjustCameraZoomForPitch(uint64_t a1, uint64_t a2, RE::Camera
 	//const float minZoom = Hooks::Offsets::GetCameraMinZoom(cameraObject->cameraModeFlags, cameraObject->unkZoom_13C > 1);
 	constexpr float minZoom = 0.5f;
 
+#if !defined(_WIN32)
+	// Two independent premises this defends, both now pinned:
+	//   1. GetFloorLevel must have resolved (tracker 0x141febcb0-get-floor-level →
+	//      FUNC_ENTRY 0x2694850, verified-adversarial 2026-09-01).
+	//   2. `a1 + 0x118` below is a Windows RAWOFFSET on the AfterUpdateCameraZoom
+	//      context. Its Linux counterpart, LinuxLayout::kZoomAdjustContext_floorQueryArg,
+	//      is pinned to 0x110 (tracker 0x141e1b5a0-after-update-camera-zoom,
+	//      verified-adversarial, CONFIRMED 2026-09-07 — the register-to-parameter
+	//      mapping past the first two arguments that the GetFloorLevel review asked
+	//      be re-checked before a hook body dereferences a7 was independently
+	//      re-derived and closed by that review, callee-side, from both binaries).
+	// The check stays as a live runtime guard rather than a static_assert: it is the
+	// last line of defence against GetFloorLevelLinux failing to resolve at runtime
+	// (pattern miss / build drift) even though the offset itself is fixed at
+	// compile time.
+	if (!Hooks::Offsets::GetFloorLevelLinux ||
+		!NCT::LinuxLayout::Known(NCT::LinuxLayout::kZoomAdjustContext_floorQueryArg) ||
+		!cameraObject) {
+		static std::once_flag warned;
+		std::call_once(warned, [] {
+			WARN("AdjustCameraZoomForPitch disabled on Linux: GetFloorLevel resolved={}, context arg offset pinned={}",
+				Hooks::Offsets::GetFloorLevelLinux != nullptr,
+				NCT::LinuxLayout::Known(NCT::LinuxLayout::kZoomAdjustContext_floorQueryArg))
+		});
+		return;
+	}
+#endif
+
 	if (cameraObject->currentZoomB <= minZoom) {
 	    return;
 	}
@@ -306,8 +361,24 @@ void CameraTweaks::AdjustCameraZoomForPitch(uint64_t a1, uint64_t a2, RE::Camera
 
 		//bool a3 = cameraObject->unkZoom_13C || (cameraObject->cameraModeFlags & 0x200) != 0;
 		bool a3 = false;
+#if defined(_WIN32)
 		RE::CameraDefinition* cameraDefinition = Hooks::Offsets::GetCurrentCameraDefinition(cameraObject);
 		Hooks::Offsets::GetFloorLevel(floorLevelStruct, a2, a3, cameraDefinition, nullptr, finalCameraPos, *reinterpret_cast<uint64_t*>(a1 + 0x118));
+#else
+		// GetCurrentCameraDefinition is inlined on Linux; use the reimplementation.
+		RE::CameraDefinition* cameraDefinition = Utils::GetCurrentCameraDefinition(cameraObject->cameraModeFlags);
+		if (!cameraDefinition) {
+			return;
+		}
+		// Linux prototype (tracker 0x141febcb0-get-floor-level, CONFIRMED
+		// 2026-09-01): the RE::FloorLevelStruct& out-param AND the redundant pointer
+		// return both collapse into a {float,bool} pair in rax:rdx, and the always-
+		// null `void* a5` is dead-arg-eliminated. Passing the Windows argument list
+		// would land &floorLevelStruct in rdi, where the callee expects `a2`.
+		floorLevelStruct = Hooks::Offsets::GetFloorLevelLinux(
+			a2, a3, cameraDefinition, finalCameraPos,
+			*reinterpret_cast<uint64_t*>(a1 + NCT::LinuxLayout::kZoomAdjustContext_floorQueryArg));
+#endif
 
 		if (floorLevelStruct.unk08) {
 			bIsUnderFloorLevel = false;
