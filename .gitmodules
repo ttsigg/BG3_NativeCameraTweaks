@@ -1,3 +1,4 @@
 [submodule "extern/DKUtil"]
 	path = extern/DKUtil
-	url = https://github.com/gottyduke/DKUtil.git
+	url = git@github.com:ttsigg/DKUtil.git
+	branch = linux-port
