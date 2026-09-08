@@ -103,7 +103,7 @@ sysroot, wrapper scripts, include order) is verified working up to that point.
 
 | Var | Default | Meaning |
 |---|---|---|
-| `DKUTIL_ROOT` | `<workspace>/DKUtil` | The Linux DKUtil fork (branch `linux-port`). **Not** `BG3_NativeCameraTweaks/extern/DKUtil` — that submodule is the Windows/vcpkg copy and isn't even checked out. |
+| `DKUTIL_ROOT` | `<workspace>/DKUtil` | The Linux DKUtil fork (`ttsigg/DKUtil`, branch `linux-port`). Since 2026-09-08 `BG3_NativeCameraTweaks/extern/DKUtil` is the *same* fork at the same commit (`797ae07`), so either path works — but the default stays the top-level checkout, which is the one the fork is developed in. If the two ever disagree, the top-level one wins. |
 | `DEPS_ROOT` | `<workspace>/Linux/deps` | Output of `fetch_deps.sh`. |
 
 Both are configure-time checks — the project fails fast with a clear message

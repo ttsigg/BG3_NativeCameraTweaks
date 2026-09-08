@@ -58,8 +58,11 @@ set(DEPS_ROOT   "${WORKSPACE_ROOT}/Linux/deps" CACHE PATH "Path to fetch_deps.sh
 if(NOT EXISTS "${DKUTIL_ROOT}/include/DKUtil/Hook.hpp")
 	message(FATAL_ERROR
 		"DKUtil fork not found at ${DKUTIL_ROOT} (expected include/DKUtil/Hook.hpp). "
-		"This must be the top-level workspace DKUtil (branch linux-port), NOT "
-		"BG3_NativeCameraTweaks/extern/DKUtil. Pass -DDKUTIL_ROOT=<path> to override.")
+		"This must be the Linux DKUtil fork (ttsigg/DKUtil, branch linux-port) -- either "
+		"the top-level workspace DKUtil/ (the default, and where the fork is developed) or "
+		"BG3_NativeCameraTweaks/extern/DKUtil, which has pointed at the same fork since "
+		"2026-09-08. Run 'git submodule update --init' if the submodule is empty. "
+		"Pass -DDKUTIL_ROOT=<path> to override.")
 endif()
 
 foreach(dep_hdr
