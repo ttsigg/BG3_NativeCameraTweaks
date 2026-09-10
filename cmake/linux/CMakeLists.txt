@@ -132,8 +132,6 @@ target_compile_options(BG3NativeCameraTweaks PRIVATE
 )
 
 target_compile_definitions(BG3NativeCameraTweaks PRIVATE
-	SPDLOG_HEADER_ONLY
-	PLUGIN_MODE
 	# The Steam sniper SDK's gcc-14 libstdc++ auto-enables its TBB-backed
 	# Parallel STL the moment /usr/include/tbb/tbb.h is visible on the
 	# sysroot include path (bits/c++config.h: "#define

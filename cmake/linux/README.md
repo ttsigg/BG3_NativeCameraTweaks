@@ -8,7 +8,7 @@ else the Linux way: no vcpkg, no PowerShell source-gen, headers found via the
 top-level DKUtil fork and `Linux/deps/` instead of `find_package(... CONFIG
 REQUIRED)`.
 
-See the top-level `CLAUDE.md` and `docs/linux-port/DKUTIL-PORT-DESIGN.md` for
+See the top-level `AGENTS.md` and `docs/linux-port/DKUTIL-PORT-DESIGN.md` for
 the wider port. This file covers only what's needed to build this one target.
 
 ## 1. Fetch the header-only dependencies (once)
